@@ -1,5 +1,11 @@
 'use strict'
 
+;(function(){
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/gh/nodeca/pako@1.0.11/dist/pako.min.js';
+  (document.body || document.querySelector('body')[0]).appendChild(script)
+})();
+
 class ServerIO {
   constructor() {
     const origin = window.location.origin.replace(/^http/, 'ws');
@@ -16,20 +22,54 @@ class ServerIO {
         return;
       }
 
-      let data = undefined;
+      let data = e.data;
+      if(this.data && this.data.compress === 1){
+        try {
+          let dec = pako.ungzip(atob(data), {to: 'string'});
+          if(dec && dec !== ''){
+            data = dec;
+          }
+        } catch(e) {}
+      }
+
       try {
-        data = JSON.parse(e.data);
-      } catch(e) {}
-      if(data === undefined){
+        data = JSON.parse(data);
+      } catch(e) {
         return;
       }
 
       if(data.name === '@connection'){
-        this.data = {
-          clientID: data.clientID,
-          token: data.token,
-          serverKey: data.serverKey,
-        };
+        if(!this.data){
+          setTimeout(() => {
+            let compress = 0;
+            if(typeof window.pako !== 'undefined'){
+              compress = 1;
+            }
+
+            this.data = {
+              clientID: data.clientID,
+              token: data.token,
+              serverKey: data.serverKey,
+              compress: compress,
+            };
+  
+            setTimeout(function(){
+              socket.send(JSON.stringify({
+                name: "@connection",
+                data: "connect",
+                token: data.token,
+                compress: compress,
+              }));
+            }, 100);
+          }, 500);
+        }
+      }else{
+        if(data.token !== this.data.serverKey){
+          return;
+        }
+        if(typeof this.listeners[data.name] === 'function'){
+          this.listeners[data.name].call(this, data.data);
+        }
       }
     }, {passive: true});
   }
@@ -39,7 +79,13 @@ class ServerIO {
       await new Promise(r => setTimeout(r, 100));
     }
 
-    cb.call(this);
+    setTimeout(function(){
+      cb.call(this);
+    }, 100)
+  }
+
+  async disconnect(cb){
+    //todo: setup disconnect function
   }
 
   async on(name, cb){
@@ -64,6 +110,38 @@ class ServerIO {
       token: this.data.token,
     }));
   }
+
+  async send(name, msg){
+    if(typeof name !== 'string' || typeof name.toString() !== 'string'){
+      console.log('test err')
+      return;
+    }
+    name = name.toString().replace(/[^\w_-]+/g, '');
+    if(name === ''){
+      return;
+    }
+
+    while(!this.data){
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    let json = JSON.stringify({
+      name: name,
+      data: msg,
+      token: this.data.token,
+    });
+
+    if(this.data.compress === 1){
+      try {
+        let enc = btoa(pako.gzip(json, {to: 'string'}));
+        if(enc && enc !== ''){
+          json = enc;
+        }
+      } catch(e) {}
+    }
+
+    this.socket.send(json);
+  }
 }
 
 ;(function(){
@@ -74,21 +152,8 @@ class ServerIO {
   });
 
   socket.on('message', function(data){
-    console.log('test was sent:', data)
+    console.log('message received:', data)
+
+    socket.send('message', 'message received');
   });
-
-  /* 'use strict'
-
-  let socket = new WebSocket(window.location.origin.replace(/^http/, 'ws') + '/ws');
-
-  socket.addEventListener('message', function(e) {
-
-
-    console.log(e.origin, e.source, e.ports)
-    console.log('received message:', e.data);
-  });
-  
-  setTimeout(function(){
-    // socket.send('hello from client');
-  }, 100); */
 })();

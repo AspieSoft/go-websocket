@@ -4,8 +4,8 @@ github.com/AspieSoft/go-syncterval v1.0.3 h1:uKHRCsg0HRdARk/36GpY+P2tNnjN+FBt31z
 github.com/AspieSoft/go-syncterval v1.0.3/go.mod h1:F4hG1ayOBB0PrCP/LCUuFZYKC4ARNKKCgWSUmq6hRd4=
 github.com/AspieSoft/go-ttlcache v1.2.0 h1:mhpHWs/cl3ByMxMZCm2LUGmF3r/2tKv43sGMpcOoZFY=
 github.com/AspieSoft/go-ttlcache v1.2.0/go.mod h1:XgT/phj4GBCFyijr1fGcE8eP26zhOq+PiffAp5FYDNs=
-github.com/AspieSoft/goutil/v3 v3.1.3 h1:vYNmV7NlZP2Cbbt2mmIMyRSO6DOBD7Kbsr7PjLcK3Ks=
-github.com/AspieSoft/goutil/v3 v3.1.3/go.mod h1:vKbRFbn8uR0PTdnJajiZB5crOwXSa3r15okbuZZdfHA=
+github.com/AspieSoft/goutil/v3 v3.1.5 h1:b7RX1B6T/saIXarHW5X2VvFeUbXAHPnJakkAi/LEXLs=
+github.com/AspieSoft/goutil/v3 v3.1.5/go.mod h1:vKbRFbn8uR0PTdnJajiZB5crOwXSa3r15okbuZZdfHA=
 github.com/GRbit/go-pcre v1.0.0 h1:Qv/YZ/tr436mFgep3Y0WAzKOZvAKGOGD0cAMwUcsEJo=
 github.com/GRbit/go-pcre v1.0.0/go.mod h1:OuMGyux1WcDrKNwDn9MyQLa2kzxQS/xFyVqXFZ/ay0I=
 github.com/alphadose/haxmap v1.2.0 h1:noGrAmCE+gNheZ4KpW+sYj9W5uMcO1UAjbAq9XBOAfM=

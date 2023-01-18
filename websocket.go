@@ -7,10 +7,18 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/AspieSoft/go-regex/v4"
 	"github.com/AspieSoft/goutil/v3"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"
 )
+
+type Listener struct {
+	name string
+	cbClient *func(client *Client)
+	cbMsg *func(msg interface{})
+	cbClientMsg *func(client *Client, msg interface{})
+}
 
 type Client struct {
 	ws *websocket.Conn
@@ -19,12 +27,19 @@ type Client struct {
 	serverKey string
 	clientID string
 	listeners []string
+	serverListeners []Listener
 	close bool
+	compress uint8
 }
 
 type Server struct {
 	origin string
 	clients *haxmap.Map[string, *Client]
+	serverListeners []Listener
+}
+
+type msgType interface {
+	string | []byte | int | bool | map[string]interface{} | []interface{} | byte | int64 | int32 | float64 | float32 | [][]byte
 }
 
 var ErrLog []error = []error{}
@@ -100,7 +115,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 }
 
 func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 102400)
 	for {
 		if client.close {
 			break
@@ -118,6 +133,10 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 		msg := buf[:b]
 
 		go func(){
+			if dec, err := goutil.Decompress(goutil.CleanByte(msg)); err == nil {
+				msg = dec
+			}
+
 			json, err := goutil.ParseJson(goutil.CleanByte(msg))
 			if err != nil {
 				newErr("read parse err:", err)
@@ -138,15 +157,61 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 			}
 			name := json["name"].(string)
 
-			if name == "@listener" {
+			if name == "@connection" {
 				if reflect.TypeOf(json["data"]) != goutil.VarType["string"] {
 					newErr("read listener invalid data: not a valid string")
 					return
 				}
 				data := json["data"].(string)
 
-				//todo: add listener
-				fmt.Println(data)
+				if data == "connect" || data == "disconnect" {
+					if data == "connect" {
+						client.compress = uint8(goutil.ToInt(json["compress"]))
+					}
+
+					//todo: add a disconnect func
+					for _, listener := range s.serverListeners {
+						go func(listener Listener){
+							if listener.name == "@"+data {
+								cb := listener.cbClient
+								if cb != nil {
+									time.Sleep(100 * time.Millisecond)
+									(*cb)((client))
+								}
+							}
+						}(listener)
+					}
+				}
+			}else if name == "@listener" {
+				if reflect.TypeOf(json["data"]) != goutil.VarType["string"] {
+					newErr("read listener invalid data: not a valid string")
+					return
+				}
+				data := json["data"].(string)
+
+				client.listeners = append(client.listeners, data)
+			}else{
+				for _, listener := range s.serverListeners {
+					go func(listener Listener){
+						if listener.name == name {
+							cb := listener.cbClientMsg
+							if cb != nil {
+								(*cb)((client), json["data"])
+							}
+						}
+					}(listener)
+				}
+
+				for _, listener := range client.serverListeners {
+					go func(listener Listener){
+						if listener.name == name {
+							cb := listener.cbMsg
+							if cb != nil {
+								(*cb)(json["data"])
+							}
+						}
+					}(listener)
+				}
 			}
 			//todo: handle other message types
 
@@ -161,18 +226,24 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 	}
 }
 
-func (s *Server) broadcast(name string, msg interface{}) {
+func (s *Server) Handler() websocket.Handler {
+	return websocket.Handler(s.handleWS)
+}
+
+func (s *Server) Broadcast(name string, msg interface{}) {
 	s.clients.ForEach(func(token string, client *Client) bool {
 		go client.Send(name, msg)
 		return true
 	})
 }
 
-func (s *Server) Handler() websocket.Handler {
-	return websocket.Handler(s.handleWS)
-}
-
 func (c *Client) Send(name string, msg interface{}){
+	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+
+	if !goutil.Contains(c.listeners, name) {
+		return
+	}
+
 	json, err := goutil.StringifyJSON(map[string]interface{}{
 		"name": name,
 		"data": msg,
@@ -182,5 +253,144 @@ func (c *Client) Send(name string, msg interface{}){
 		newErr("write parse err:", err)
 	}
 
+	if c.compress == 1 {
+		if enc, err := goutil.Compress(json); err == nil {
+			json = enc
+		}
+	}
+
 	c.ws.Write(json)
+}
+
+func (s *Server) Connect(cb func(client *Client)){
+	s.serverListeners = append(s.serverListeners, Listener{
+		name: "@connect",
+		cbClient: &cb,
+	})
+}
+
+func (s *Server) On(name string, cb func(client *Client, msg interface{})){
+	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+
+	s.serverListeners = append(s.serverListeners, Listener{
+		name: name,
+		cbClientMsg: &cb,
+	})
+}
+
+func (c *Client) On(name string, cb func(msg interface{})){
+	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+
+	c.serverListeners = append(c.serverListeners, Listener{
+		name: name,
+		cbMsg: &cb,
+	})
+}
+
+// MsgToType attempts to converts an msg interface from the many possible json outputs, to a specific type of your choice
+//
+// if it fails to convert, it will return a nil/zero value for the appropriate type
+//
+// supported types: string | []byte | int | bool | map[string]interface{} | []interface{} | byte | int64 | int32 | float64 | float32 | [][]byte
+//
+// recommended: add .(string|[]byte|int|etc) to the end of the function to get that type output in place of interface{}
+func MsgType[T msgType](msg interface{}) interface{} {
+	var varT interface{} = ""
+	if _, ok := varT.(T); ok {
+		return goutil.ToString(msg)
+	}
+
+	varT = []byte{}
+	if _, ok := varT.(T); ok {
+		if reflect.TypeOf(msg) == goutil.VarType["array"] {
+			res := []byte{}
+			for _, val := range msg.([]interface{}) {
+				b := goutil.ToByteArray(val)
+				if len(b) != 0 {
+					res = append(res, b...)
+				}
+			}
+			return res
+		}
+		return goutil.ToByteArray(msg)
+	}
+
+	varT = int(0)
+	if _, ok := varT.(T); ok {
+		return goutil.ToInt(msg)
+	}
+
+	varT = bool(false)
+	if _, ok := varT.(T); ok {
+		return goutil.IsZeroOfUnderlyingType(msg)
+	}
+
+	varT = map[string]interface{}{}
+	if _, ok := varT.(T); ok {
+		if reflect.TypeOf(msg) == goutil.VarType["map"] {
+			return msg.(map[string]interface{})
+		}
+		return map[string]interface{}{}
+	}
+
+	varT = []interface{}{}
+	if _, ok := varT.(T); ok {
+		if reflect.TypeOf(msg) == goutil.VarType["array"] {
+			return msg.([]interface{})
+		}
+		return []interface{}{}
+	}
+
+	varT = int64(0)
+	if _, ok := varT.(T); ok {
+		return int64(goutil.ToInt(msg))
+	}
+
+	varT = float64(0)
+	if _, ok := varT.(T); ok {
+		return goutil.ToFloat(msg)
+	}
+
+	varT = float32(0)
+	if _, ok := varT.(T); ok {
+		return float32(goutil.ToFloat(msg))
+	}
+
+	varT = byte(0)
+	if _, ok := varT.(T); ok {
+		b := goutil.ToByteArray(msg)
+		if len(b) == 1 {
+			return b[0]
+		}
+		return byte(0)
+	}
+
+	varT = int32(0)
+	if _, ok := varT.(T); ok {
+		b := goutil.ToByteArray(msg)
+		if len(b) == 1 {
+			return int32(b[0])
+		}
+		return int32(goutil.ToInt(msg))
+	}
+
+	varT = [][]byte{}
+	if _, ok := varT.(T); ok {
+		t := reflect.TypeOf(msg)
+		if t == goutil.VarType["array"] {
+			res := [][]byte{}
+			for _, val := range msg.([]interface{}) {
+				b := goutil.ToByteArray(val)
+				if len(b) != 0 {
+					res = append(res, b)
+				}
+			}
+			return res
+		}else if t == goutil.VarType["arrayByte"] {
+			return msg.([][]byte)
+		}
+		return [][]byte{}
+	}
+
+	return nil
 }
