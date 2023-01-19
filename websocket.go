@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/AspieSoft/go-regex/v4"
-	"github.com/AspieSoft/goutil/v3"
+	"github.com/AspieSoft/goutil/v4"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"
 )
@@ -166,7 +166,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 
 				if data == "connect" || data == "disconnect" {
 					if data == "connect" {
-						client.compress = uint8(goutil.ToInt(json["compress"]))
+						client.compress = goutil.ToNumber[uint8](json["compress"])
 					}
 
 					//todo: add a disconnect func
@@ -291,106 +291,7 @@ func (c *Client) On(name string, cb func(msg interface{})){
 //
 // if it fails to convert, it will return a nil/zero value for the appropriate type
 //
-// supported types: string | []byte | int | bool | map[string]interface{} | []interface{} | byte | int64 | int32 | float64 | float32 | [][]byte
-//
 // recommended: add .(string|[]byte|int|etc) to the end of the function to get that type output in place of interface{}
-func MsgType[T msgType](msg interface{}) interface{} {
-	var varT interface{} = ""
-	if _, ok := varT.(T); ok {
-		return goutil.ToString(msg)
-	}
-
-	varT = []byte{}
-	if _, ok := varT.(T); ok {
-		if reflect.TypeOf(msg) == goutil.VarType["array"] {
-			res := []byte{}
-			for _, val := range msg.([]interface{}) {
-				b := goutil.ToByteArray(val)
-				if len(b) != 0 {
-					res = append(res, b...)
-				}
-			}
-			return res
-		}
-		return goutil.ToByteArray(msg)
-	}
-
-	varT = int(0)
-	if _, ok := varT.(T); ok {
-		return goutil.ToInt(msg)
-	}
-
-	varT = bool(false)
-	if _, ok := varT.(T); ok {
-		return goutil.IsZeroOfUnderlyingType(msg)
-	}
-
-	varT = map[string]interface{}{}
-	if _, ok := varT.(T); ok {
-		if reflect.TypeOf(msg) == goutil.VarType["map"] {
-			return msg.(map[string]interface{})
-		}
-		return map[string]interface{}{}
-	}
-
-	varT = []interface{}{}
-	if _, ok := varT.(T); ok {
-		if reflect.TypeOf(msg) == goutil.VarType["array"] {
-			return msg.([]interface{})
-		}
-		return []interface{}{}
-	}
-
-	varT = int64(0)
-	if _, ok := varT.(T); ok {
-		return int64(goutil.ToInt(msg))
-	}
-
-	varT = float64(0)
-	if _, ok := varT.(T); ok {
-		return goutil.ToFloat(msg)
-	}
-
-	varT = float32(0)
-	if _, ok := varT.(T); ok {
-		return float32(goutil.ToFloat(msg))
-	}
-
-	varT = byte(0)
-	if _, ok := varT.(T); ok {
-		b := goutil.ToByteArray(msg)
-		if len(b) == 1 {
-			return b[0]
-		}
-		return byte(0)
-	}
-
-	varT = int32(0)
-	if _, ok := varT.(T); ok {
-		b := goutil.ToByteArray(msg)
-		if len(b) == 1 {
-			return int32(b[0])
-		}
-		return int32(goutil.ToInt(msg))
-	}
-
-	varT = [][]byte{}
-	if _, ok := varT.(T); ok {
-		t := reflect.TypeOf(msg)
-		if t == goutil.VarType["array"] {
-			res := [][]byte{}
-			for _, val := range msg.([]interface{}) {
-				b := goutil.ToByteArray(val)
-				if len(b) != 0 {
-					res = append(res, b)
-				}
-			}
-			return res
-		}else if t == goutil.VarType["arrayByte"] {
-			return msg.([][]byte)
-		}
-		return [][]byte{}
-	}
-
-	return nil
+func MsgType[T goutil.SupportedType] (msg interface{}) interface{} {
+	return goutil.ToType[T](msg)
 }
