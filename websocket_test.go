@@ -29,6 +29,10 @@ func Test(t *testing.T){
 			fmt.Println("client:", str)
 		})
 
+		client.Disconnect(func(code int) {
+			fmt.Println("client disconnected", code)
+		})
+
 		server.Broadcast("message", "test")
 		server.Broadcast("no-message", "test should not be sent")
 	})
@@ -37,8 +41,12 @@ func Test(t *testing.T){
 		fmt.Println("server:", msg)
 	})
 
+	server.Disconnect(func(client *Client, code int) {
+		fmt.Println("server disconnected", code)
+	})
+
 	go func(){
-		time.Sleep(3 * time.Second)
+		time.Sleep(5 * time.Second)
 
 		// server.Broadcast("message", "test")
 		// server.Broadcast("no-message", "test should not be sent")

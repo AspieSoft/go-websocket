@@ -18,6 +18,8 @@ type Listener struct {
 	cbClient *func(client *Client)
 	cbMsg *func(msg interface{})
 	cbClientMsg *func(client *Client, msg interface{})
+	cbCode *func(code int)
+	cbClientCode *func(client *Client, code int)
 }
 
 type Client struct {
@@ -43,6 +45,7 @@ type msgType interface {
 }
 
 var ErrLog []error = []error{}
+var logErr bool
 
 func newErr(name string, err ...error){
 	ErrLog = append(ErrLog, errors.New(name))
@@ -51,7 +54,6 @@ func newErr(name string, err ...error){
 	}
 }
 
-var logErr bool
 func LogErrors(){
 	if logErr {
 		return
@@ -86,7 +88,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	}
 
 	clientID := string(goutil.RandBytes(16))
-	token := string(goutil.RandBytes(64))
+	token := string(goutil.RandBytes(32))
 	serverKey := string(goutil.RandBytes(32))
 
 	client := Client{
@@ -101,6 +103,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 
 	json, err := goutil.StringifyJSON(map[string]interface{}{
 		"name": "@connection",
+		"data": "connect",
 		"clientID": clientID,
 		"token": token,
 		"serverKey": serverKey,
@@ -116,14 +119,38 @@ func (s *Server) handleWS(ws *websocket.Conn){
 
 func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 	buf := make([]byte, 102400)
-	for {
-		if client.close {
-			break
-		}
-
+	for !client.close {
 		b, err := ws.Read(buf)
 		if err != nil {
 			if err == io.EOF {
+				if !client.close {
+					for _, listener := range s.serverListeners {
+						go func(listener Listener){
+							if listener.name == "@disconnect" {
+								cb := listener.cbClientCode
+								if cb != nil {
+									time.Sleep(100 * time.Millisecond)
+									(*cb)(client, 1006)
+								}
+							}
+						}(listener)
+					}
+	
+					for _, listener := range client.serverListeners {
+						go func(listener Listener){
+							if listener.name == "@disconnect" {
+								cb := listener.cbCode
+								if cb != nil {
+									time.Sleep(100 * time.Millisecond)
+									(*cb)(1006)
+								}
+							}
+						}(listener)
+					}
+				}
+
+				client.close = true
+				s.clients.Del(client.clientID)
 				break
 			}
 			newErr("read err:", err)
@@ -164,23 +191,53 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				}
 				data := json["data"].(string)
 
-				if data == "connect" || data == "disconnect" {
-					if data == "connect" {
-						client.compress = goutil.ToNumber[uint8](json["compress"])
-					}
+				if data == "connect" {
+					client.compress = goutil.ToNumber[uint8](json["compress"])
 
-					//todo: add a disconnect func
 					for _, listener := range s.serverListeners {
 						go func(listener Listener){
-							if listener.name == "@"+data {
+							if listener.name == "@connect" {
 								cb := listener.cbClient
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
-									(*cb)((client))
+									(*cb)(client)
 								}
 							}
 						}(listener)
 					}
+				}else if data == "disconnect" {
+					code := goutil.ToNumber[int](json["code"])
+					if code < 1000 {
+						code = 1000
+					}
+
+					for _, listener := range s.serverListeners {
+						go func(listener Listener){
+							if listener.name == "@disconnect" {
+								cb := listener.cbClientCode
+								if cb != nil {
+									time.Sleep(100 * time.Millisecond)
+									(*cb)(client, code)
+								}
+							}
+						}(listener)
+					}
+
+					for _, listener := range client.serverListeners {
+						go func(listener Listener){
+							if listener.name == "@disconnect" {
+								cb := listener.cbCode
+								if cb != nil {
+									time.Sleep(100 * time.Millisecond)
+									(*cb)(code)
+								}
+							}
+						}(listener)
+					}
+
+					client.close = true
+					s.clients.Del(client.clientID)
+					ws.Close()
 				}
 			}else if name == "@listener" {
 				if reflect.TypeOf(json["data"]) != goutil.VarType["string"] {
@@ -189,7 +246,11 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				}
 				data := json["data"].(string)
 
-				client.listeners = append(client.listeners, data)
+				go func(){
+					if !goutil.Contains(client.listeners, data) {
+						client.listeners = append(client.listeners, data)
+					}
+				}()
 			}else{
 				for _, listener := range s.serverListeners {
 					go func(listener Listener){
@@ -284,6 +345,20 @@ func (c *Client) On(name string, cb func(msg interface{})){
 	c.serverListeners = append(c.serverListeners, Listener{
 		name: name,
 		cbMsg: &cb,
+	})
+}
+
+func (s *Server) Disconnect(cb func(client *Client, code int)){
+	s.serverListeners = append(s.serverListeners, Listener{
+		name: "@disconnect",
+		cbClientCode: &cb,
+	})
+}
+
+func (c *Client) Disconnect(cb func(code int)){
+	c.serverListeners = append(c.serverListeners, Listener{
+		name: "@disconnect",
+		cbCode: &cb,
 	})
 }
 
