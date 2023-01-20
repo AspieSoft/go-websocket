@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-type Listener struct {
+type listener struct {
 	name string
 	cbClient *func(client *Client)
 	cbMsg *func(msg interface{})
@@ -22,22 +22,24 @@ type Listener struct {
 	cbClientCode *func(client *Client, code int)
 }
 
+// Client of a websocket
 type Client struct {
 	ws *websocket.Conn
 	ip string
 	token string
 	serverKey string
-	clientID string
+	ClientID string
 	listeners []string
-	serverListeners []Listener
+	serverListeners []listener
 	close bool
 	compress uint8
 }
 
+// Server for a websocket
 type Server struct {
 	origin string
 	clients *haxmap.Map[string, *Client]
-	serverListeners []Listener
+	serverListeners []listener
 }
 
 type msgType interface {
@@ -108,7 +110,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	client := Client{
 		ws: ws,
 		ip: ws.Request().RemoteAddr,
-		clientID: clientID,
+		ClientID: clientID,
 		token: token,
 		serverKey: serverKey,
 	}
@@ -138,33 +140,33 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 		if err != nil {
 			if err == io.EOF {
 				if !client.close {
-					for _, listener := range s.serverListeners {
-						go func(listener Listener){
-							if listener.name == "@disconnect" {
-								cb := listener.cbClientCode
+					for _, l := range s.serverListeners {
+						go func(l listener){
+							if l.name == "@disconnect" {
+								cb := l.cbClientCode
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
 									(*cb)(client, 1006)
 								}
 							}
-						}(listener)
+						}(l)
 					}
 	
-					for _, listener := range client.serverListeners {
-						go func(listener Listener){
-							if listener.name == "@disconnect" {
-								cb := listener.cbCode
+					for _, l := range client.serverListeners {
+						go func(l listener){
+							if l.name == "@disconnect" {
+								cb := l.cbCode
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
 									(*cb)(1006)
 								}
 							}
-						}(listener)
+						}(l)
 					}
 				}
 
 				client.close = true
-				s.clients.Del(client.clientID)
+				s.clients.Del(client.ClientID)
 				break
 			}
 
@@ -213,16 +215,16 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				if data == "connect" {
 					client.compress = goutil.ToNumber[uint8](json["compress"])
 
-					for _, listener := range s.serverListeners {
-						go func(listener Listener){
-							if listener.name == "@connect" {
-								cb := listener.cbClient
+					for _, l := range s.serverListeners {
+						go func(l listener){
+							if l.name == "@connect" {
+								cb := l.cbClient
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
 									(*cb)(client)
 								}
 							}
-						}(listener)
+						}(l)
 					}
 				}else if data == "disconnect" {
 					code := goutil.ToNumber[int](json["code"])
@@ -230,32 +232,32 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 						code += 1000
 					}
 
-					for _, listener := range s.serverListeners {
-						go func(listener Listener){
-							if listener.name == "@disconnect" {
-								cb := listener.cbClientCode
+					for _, l := range s.serverListeners {
+						go func(l listener){
+							if l.name == "@disconnect" {
+								cb := l.cbClientCode
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
 									(*cb)(client, code)
 								}
 							}
-						}(listener)
+						}(l)
 					}
 
-					for _, listener := range client.serverListeners {
-						go func(listener Listener){
-							if listener.name == "@disconnect" {
-								cb := listener.cbCode
+					for _, l := range client.serverListeners {
+						go func(l listener){
+							if l.name == "@disconnect" {
+								cb := l.cbCode
 								if cb != nil {
 									time.Sleep(100 * time.Millisecond)
 									(*cb)(code)
 								}
 							}
-						}(listener)
+						}(l)
 					}
 
 					client.close = true
-					s.clients.Del(client.clientID)
+					s.clients.Del(client.ClientID)
 					ws.Close()
 				}
 			}else if name == "@listener" {
@@ -271,32 +273,32 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 					}
 				}()
 			}else{
-				for _, listener := range s.serverListeners {
-					go func(listener Listener){
-						if listener.name == name {
-							cb := listener.cbClientMsg
+				for _, l := range s.serverListeners {
+					go func(l listener){
+						if l.name == name {
+							cb := l.cbClientMsg
 							if cb != nil {
 								(*cb)((client), json["data"])
 							}
 						}
-					}(listener)
+					}(l)
 				}
 
-				for _, listener := range client.serverListeners {
-					go func(listener Listener){
-						if listener.name == name {
-							cb := listener.cbMsg
+				for _, l := range client.serverListeners {
+					go func(l listener){
+						if l.name == name {
+							cb := l.cbMsg
 							if cb != nil {
 								(*cb)(json["data"])
 							}
 						}
-					}(listener)
+					}(l)
 				}
 			}
 		}()
 	}
 
-	s.clients.Del(client.clientID)
+	s.clients.Del(client.ClientID)
 }
 
 // Handler should be passed into your http handler
@@ -312,6 +314,13 @@ func (s *Server) Broadcast(name string, msg interface{}) {
 		go client.Send(name, msg)
 		return true
 	})
+}
+
+// Send sends a message to a specific client
+func (s *Server) Send(clientID string, name string, msg interface{}){
+	if client, ok := s.clients.Get(clientID); ok {
+		client.Send(name, msg)
+	}
 }
 
 // Send sends a message to the client
@@ -346,7 +355,7 @@ func (c *Client) Send(name string, msg interface{}){
 
 // Connect runs your callback when a new client connects to the websocket
 func (s *Server) Connect(cb func(client *Client)){
-	s.serverListeners = append(s.serverListeners, Listener{
+	s.serverListeners = append(s.serverListeners, listener{
 		name: "@connect",
 		cbClient: &cb,
 	})
@@ -356,7 +365,7 @@ func (s *Server) Connect(cb func(client *Client)){
 func (s *Server) On(name string, cb func(client *Client, msg interface{})){
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
-	s.serverListeners = append(s.serverListeners, Listener{
+	s.serverListeners = append(s.serverListeners, listener{
 		name: name,
 		cbClientMsg: &cb,
 	})
@@ -366,7 +375,7 @@ func (s *Server) On(name string, cb func(client *Client, msg interface{})){
 func (c *Client) On(name string, cb func(msg interface{})){
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
-	c.serverListeners = append(c.serverListeners, Listener{
+	c.serverListeners = append(c.serverListeners, listener{
 		name: name,
 		cbMsg: &cb,
 	})
@@ -374,7 +383,7 @@ func (c *Client) On(name string, cb func(msg interface{})){
 
 // Disconnect runs your callback when any client disconnects from the websocket
 func (s *Server) Disconnect(cb func(client *Client, code int)){
-	s.serverListeners = append(s.serverListeners, Listener{
+	s.serverListeners = append(s.serverListeners, listener{
 		name: "@disconnect",
 		cbClientCode: &cb,
 	})
@@ -382,10 +391,17 @@ func (s *Server) Disconnect(cb func(client *Client, code int)){
 
 // Disconnect runs your callback when the client disconnects from the websocket
 func (c *Client) Disconnect(cb func(code int)){
-	c.serverListeners = append(c.serverListeners, Listener{
+	c.serverListeners = append(c.serverListeners, listener{
 		name: "@disconnect",
 		cbCode: &cb,
 	})
+}
+
+// Exit will force a specific client to disconnect from the websocket
+func (s *Server) Exit(clientID string, code int){
+	if client, ok := s.clients.Get(clientID); ok {
+		client.Exit(code)
+	}
 }
 
 // ExitAll will force every client to disconnect from the websocket
