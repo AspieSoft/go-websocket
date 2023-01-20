@@ -35,7 +35,7 @@ import (
 )
 
 func main(){
-  server := websocket.NewServer("http://localhost:3000")
+  server := websocket.NewServer("https://www.example.com")
 	http.Handle("/ws", server.Handler())
 
   static := http.FileServer(http.Dir("./public/"))
@@ -60,10 +60,12 @@ func main(){
 		})
 
     // send data to client
-    client.Send("message", "my message")
+    client.Send("message", "my message to the client")
 
     client.Send("json", map[string]interface{}{
-      "jsondata": "my json data"
+      "jsondata": "my json data",
+      "key": "value",
+      "a": 1,
     })
 
     client.on("send-to-friend", func(msg interface{}){
@@ -71,6 +73,12 @@ func main(){
 
       // send a message to a different client
       server.send(json["friendsClientID"], json["msg"])
+
+      // do other stuff...
+      client.send("send-from-friend", map[string]interface{
+        "ClientID": client.ClientID,
+        "msg": "General Kenobi!",
+      })
     })
 
     client.Disconnect(func(code int) {
@@ -83,17 +91,79 @@ func main(){
 		friendsClientID := websocket.MsgType[string](msg).(string)
 
     // force a client to leave the server
-    server.Exit(friendsClientID, 1000)
+    server.Kick(friendsClientID, 1000)
 
     server.Broadcast("kicked", friendsClientID+" was kicked by "+client.ClientID)
 	})
 
   server.On("kick-all", func(client *Client, msg interface{}) {
     // kick every client from the server
-    server.ExitAll()
+    server.KickAll()
   })
 
   log.Fatal(http.ListenAndServe(":3000", nil))
 }
+
+```
+
+### JavaScript (client)
+
+```JavaScript
+
+const socket = new ServerIO(); // will default to current origin
+// or
+const socket = new ServerIO('https://www.example.com'); // optional: specify a different origin
+
+socket.connect(function(){
+  // connected to server
+
+  socket.send('message', "my message to the server");
+});
+
+socket.on('message', function(msg){
+  console.log('I got a new message:', msg);
+
+  socket.send('json', {
+    jsondata: 'my json data',
+    key: 'value',
+    a: 1,
+  });
+});
+
+socket.on('json', function(msg){
+  console.log('pre-parsed json:', msg.jsondata);
+});
+
+socket.on('notify', function(msg){
+  console.log(msg);
+});
+
+let myNewFriend = null;
+socket.on('user', function(msg){
+  myNewFriend = msg;
+
+  socket.send('send-to-friend', {
+    friendsClientID: myNewFriend,
+    msg: 'Hello, There!',
+  })
+});
+
+socket.on('send-from-friend', function(msg){
+  socket.send('kick', myNewFriend);
+});
+
+socket.on('kicked', function(msg){
+  socket.send('kick-all');
+
+  // run disconnect
+  socket.disconnect();
+
+  // run reconnect
+  socket.connect();
+});
+
+socket.disconnect(function(){
+  // on disconnect
+});
 
 ```

@@ -398,22 +398,22 @@ func (c *Client) Disconnect(cb func(code int)){
 }
 
 // Exit will force a specific client to disconnect from the websocket
-func (s *Server) Exit(clientID string, code int){
+func (s *Server) Kick(clientID string, code int){
 	if client, ok := s.clients.Get(clientID); ok {
-		client.Exit(code)
+		client.Kick(code)
 	}
 }
 
 // ExitAll will force every client to disconnect from the websocket
-func (s *Server) ExitAll(code int){
+func (s *Server) KickAll(code int){
 	s.clients.ForEach(func(token string, client *Client) bool {
-		go client.Exit(code)
+		go client.Kick(code)
 		return true
 	})
 }
 
 // ExitAll will force the client to disconnect from the websocket
-func (c *Client) Exit(code int){
+func (c *Client) Kick(code int){
 	c.close = true
 	if code < 1000 {
 		code += 1000
