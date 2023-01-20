@@ -44,16 +44,27 @@ type msgType interface {
 	string | []byte | int | bool | map[string]interface{} | []interface{} | byte | int64 | int32 | float64 | float32 | [][]byte
 }
 
+// ErrLog contains a list of client errors which you can handle any way you would like
 var ErrLog []error = []error{}
+
 var logErr bool
 
 func newErr(name string, err ...error){
-	ErrLog = append(ErrLog, errors.New(name))
+	resErr := name
+
+	// ErrLog = append(ErrLog, errors.New(name))
 	for _, e := range err {
-		ErrLog = append(ErrLog, e)
+		// ErrLog = append(ErrLog, e)
+
+		resErr += e.Error()
 	}
+
+	ErrLog = append(ErrLog, errors.New(resErr))
 }
 
+// LogErrors can be used if you would like client errors to be logged with fmt.Println
+//
+// By default, these errors will not be logged
 func LogErrors(){
 	if logErr {
 		return
@@ -72,6 +83,9 @@ func LogErrors(){
 	}()
 }
 
+// NewServer creates a new server
+//
+// @origin enforces a specific http/https host to be accepted, and rejects connections from other hosts
 func NewServer(origin string) *Server {
 	server := Server{
 		origin: origin,
@@ -153,6 +167,11 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				s.clients.Del(client.clientID)
 				break
 			}
+
+			if client.close {
+				break
+			}
+
 			newErr("read err:", err)
 			continue
 		}
@@ -208,7 +227,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				}else if data == "disconnect" {
 					code := goutil.ToNumber[int](json["code"])
 					if code < 1000 {
-						code = 1000
+						code += 1000
 					}
 
 					for _, listener := range s.serverListeners {
@@ -274,23 +293,20 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 					}(listener)
 				}
 			}
-			//todo: handle other message types
-
-			// fmt.Println("json:", json)
 		}()
-
-		// fmt.Println(string(msg))
-
-		// s.broadcast("broadcast", []byte("msg received"))
-
-		// ws.Write([]byte("msg received"))
 	}
+
+	s.clients.Del(client.clientID)
 }
 
+// Handler should be passed into your http handler
+//
+// http.Handle("/ws", server.Handler())
 func (s *Server) Handler() websocket.Handler {
 	return websocket.Handler(s.handleWS)
 }
 
+// Broadcast sends a message to every client
 func (s *Server) Broadcast(name string, msg interface{}) {
 	s.clients.ForEach(func(token string, client *Client) bool {
 		go client.Send(name, msg)
@@ -298,7 +314,12 @@ func (s *Server) Broadcast(name string, msg interface{}) {
 	})
 }
 
+// Send sends a message to the client
 func (c *Client) Send(name string, msg interface{}){
+	if c.close {
+		return
+	}
+
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
 	if !goutil.Contains(c.listeners, name) {
@@ -323,6 +344,7 @@ func (c *Client) Send(name string, msg interface{}){
 	c.ws.Write(json)
 }
 
+// Connect runs your callback when a new client connects to the websocket
 func (s *Server) Connect(cb func(client *Client)){
 	s.serverListeners = append(s.serverListeners, Listener{
 		name: "@connect",
@@ -330,6 +352,7 @@ func (s *Server) Connect(cb func(client *Client)){
 	})
 }
 
+// On runs your callback when any client a message of the same name
 func (s *Server) On(name string, cb func(client *Client, msg interface{})){
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
@@ -339,6 +362,7 @@ func (s *Server) On(name string, cb func(client *Client, msg interface{})){
 	})
 }
 
+// On runs your callback when the client sends a message of the same name
 func (c *Client) On(name string, cb func(msg interface{})){
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
@@ -348,6 +372,7 @@ func (c *Client) On(name string, cb func(msg interface{})){
 	})
 }
 
+// Disconnect runs your callback when any client disconnects from the websocket
 func (s *Server) Disconnect(cb func(client *Client, code int)){
 	s.serverListeners = append(s.serverListeners, Listener{
 		name: "@disconnect",
@@ -355,11 +380,29 @@ func (s *Server) Disconnect(cb func(client *Client, code int)){
 	})
 }
 
+// Disconnect runs your callback when the client disconnects from the websocket
 func (c *Client) Disconnect(cb func(code int)){
 	c.serverListeners = append(c.serverListeners, Listener{
 		name: "@disconnect",
 		cbCode: &cb,
 	})
+}
+
+// ExitAll will force every client to disconnect from the websocket
+func (s *Server) ExitAll(code int){
+	s.clients.ForEach(func(token string, client *Client) bool {
+		go client.Exit(code)
+		return true
+	})
+}
+
+// ExitAll will force the client to disconnect from the websocket
+func (c *Client) Exit(code int){
+	c.close = true
+	if code < 1000 {
+		code += 1000
+	}
+	c.ws.WriteClose(code)
 }
 
 // MsgToType attempts to converts an msg interface from the many possible json outputs, to a specific type of your choice
