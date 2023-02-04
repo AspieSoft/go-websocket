@@ -17,9 +17,7 @@ An easy way to get started with websockets in golang.
 ### JavaScript (client)
 
 ```html
-
-  <script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.0.0/client.min.js" defer></script>
-
+<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.0.0/client.min.js" defer></script>
 ```
 
 ## Usage
@@ -36,10 +34,10 @@ import (
 
 func main(){
   server := websocket.NewServer("https://www.example.com")
-	http.Handle("/ws", server.Handler())
+  http.Handle("/ws", server.Handler())
 
   static := http.FileServer(http.Dir("./public/"))
-	http.Handle("/", static)
+  http.Handle("/", static)
 
   server.Connect(func(client *Client){
     // client connected
@@ -57,7 +55,7 @@ func main(){
       bool := websocket.MsgType[bool](msg).(bool)
       json := websocket.MsgType[map[string]interface{}](msg).(map[string]interface{})
       array := websocket.MsgType[[]interface{}](msg).([]interface{})
-		})
+    })
 
     // send data to client
     client.Send("message", "my message to the client")
@@ -84,17 +82,17 @@ func main(){
     client.Disconnect(func(code int) {
       // when client disconnects
       server.Broadcast("disconnected", client.ClientID)
-	  })
+    })
   })
 
   server.On("kick", func(client *Client, msg interface{}) {
-		friendsClientID := websocket.MsgType[string](msg).(string)
+    friendsClientID := websocket.MsgType[string](msg).(string)
 
     // force a client to leave the server
     server.Kick(friendsClientID, 1000)
 
     server.Broadcast("kicked", friendsClientID+" was kicked by "+client.ClientID)
-	})
+  })
 
   server.On("kick-all", func(client *Client, msg interface{}) {
     // kick every client from the server
