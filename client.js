@@ -1,9 +1,25 @@
 'use strict'
 
 ;(function(){
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/gh/nodeca/pako@1.0.11/dist/pako.min.js';
-  (document.body || document.querySelector('body')[0]).appendChild(script)
+  const body = (document.body || document.querySelector('body')[0]);
+
+  let nonceKey = undefined;
+  const nonceKeyElm = document.querySelector('script[nonce]');
+  if(nonceKeyElm){
+    nonceKey = nonceKeyElm.getAttribute('nonce');
+  }
+
+  function addScript(url){
+    const script = document.createElement('script');
+    script.src = url;
+    if(nonceKey){
+      script.setAttribute('nonce', nonceKey);
+    }
+    body.appendChild(script)
+  }
+
+  // add script dependencies
+  addScript('https://cdn.jsdelivr.net/gh/nodeca/pako@1.0.11/dist/pako.min.js');
 })();
 
 class ServerIO {
