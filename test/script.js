@@ -18,6 +18,6 @@
   });
 
   setTimeout(function(){
-    socket.disconnect();
+    socket.disconnect(1006);
   }, 3000);
 })();

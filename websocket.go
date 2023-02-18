@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/AspieSoft/go-regex/v4"
@@ -28,11 +29,14 @@ type Client struct {
 	ip string
 	token string
 	serverKey string
+	encKey string
 	ClientID string
 	listeners []string
 	serverListeners []listener
 	close bool
 	compress uint8
+	connLost int64
+	Store map[string]interface{}
 }
 
 // Server for a websocket
@@ -40,6 +44,7 @@ type Server struct {
 	origin string
 	clients *haxmap.Map[string, *Client]
 	serverListeners []listener
+	uuidSize int
 }
 
 type msgType interface {
@@ -88,11 +93,29 @@ func LogErrors(){
 // NewServer creates a new server
 //
 // @origin enforces a specific http/https host to be accepted, and rejects connections from other hosts
-func NewServer(origin string) *Server {
+func NewServer(origin string, reconnectTimeout ...time.Duration) *Server {
 	server := Server{
 		origin: origin,
 		clients: haxmap.New[string, *Client](),
+		uuidSize: 16,
 	}
+
+	timeout := int64(30 * time.Second)
+	if len(reconnectTimeout) != 0 {
+		timeout = int64(reconnectTimeout[0])
+	}
+
+	go func(){
+		time.Sleep(1 * time.Second)
+
+		now := time.Now().UnixNano()
+		server.clients.ForEach(func(clientID string, client *Client) bool {
+			if client.close && now - client.connLost > timeout {
+				server.clients.Del(clientID)
+			}
+			return true
+		})
+	}()
 
 	return &server
 }
@@ -103,9 +126,11 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		return
 	}
 
-	clientID := string(goutil.RandBytes(16))
+	clientID := s.clientUUID()
 	token := string(goutil.RandBytes(32))
 	serverKey := string(goutil.RandBytes(32))
+	// encKey := string(goutil.RandBytes(64))
+	encKey := string(goutil.RandBytes(32))
 
 	client := Client{
 		ws: ws,
@@ -113,6 +138,8 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		ClientID: clientID,
 		token: token,
 		serverKey: serverKey,
+		encKey: encKey,
+		Store: map[string]interface{}{},
 	}
 
 	s.clients.Set(clientID, &client)
@@ -123,6 +150,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		"clientID": clientID,
 		"token": token,
 		"serverKey": serverKey,
+		"encKey": encKey,
 	})
 	if err != nil {
 		newErr("connection parse err:", err)
@@ -165,8 +193,9 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 					}
 				}
 
+				client.connLost = time.Now().UnixNano()
 				client.close = true
-				s.clients.Del(client.ClientID)
+				// s.clients.Del(client.ClientID)
 				break
 			}
 
@@ -256,9 +285,38 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 						}(l)
 					}
 
+					if code == 1000 {
+						s.clients.Del(client.ClientID)
+					}else{
+						client.connLost = time.Now().UnixNano()
+					}
+
 					client.close = true
-					s.clients.Del(client.ClientID)
 					ws.Close()
+				}else if data == "migrate" {
+					oldClientID := goutil.ToString[string](json["oldClient"])
+					oldToken := goutil.ToString[string](json["oldToken"])
+					oldServerKey := goutil.ToString[string](json["oldServerKey"])
+					oldEncKey := goutil.ToString[string](json["oldEncKey"])
+
+					if oldClient, ok := s.clients.Get(oldClientID); ok && oldClient.close && oldClient.token == oldToken && oldClient.serverKey == oldServerKey && oldClient.encKey == oldEncKey && oldClient.ip == client.ip {
+						// migrate old client data to new client
+						for _, l := range oldClient.listeners {
+							client.listeners = append(client.listeners, l)
+						}
+
+						for _, sl := range oldClient.serverListeners {
+							client.serverListeners = append(client.serverListeners, sl)
+						}
+
+						for k, s := range oldClient.Store {
+							if client.Store[k] == nil {
+								client.Store[k] = s
+							}
+						}
+					}else{
+						client.sendCore("@error", "migrate")
+					}
 				}
 			}else if name == "@listener" {
 				if reflect.TypeOf(json["data"]) != goutil.VarType["string"] {
@@ -268,7 +326,15 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				data := json["data"].(string)
 
 				go func(){
-					if !goutil.Contains(client.listeners, data) {
+					if strings.HasPrefix(data, "!") {
+						data = data[1:]
+						for i := 0; i < len(client.listeners); i++ {
+							if client.listeners[i] == data {
+								client.listeners = append(client.listeners[:i], client.listeners[i+1:]...)
+								break
+							}
+						}
+					}else if !goutil.Contains(client.listeners, data) {
 						client.listeners = append(client.listeners, data)
 					}
 				}()
@@ -298,7 +364,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 		}()
 	}
 
-	s.clients.Del(client.ClientID)
+	// s.clients.Del(client.ClientID)
 }
 
 // Handler should be passed into your http handler
@@ -332,6 +398,43 @@ func (c *Client) Send(name string, msg interface{}){
 	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
 
 	if !goutil.Contains(c.listeners, name) {
+		return
+	}
+
+	//todo: encrypt stringified json msg
+	/* b, err := goutil.StringifyJSON(msg)
+	if err != nil {
+		newErr("write parse err:", err)
+		return
+	} */
+	
+	// keyHash := sha256.Sum256([]byte(c.encKey))
+	// fmt.Println(string(keyHash[:]))
+
+	json, err := goutil.StringifyJSON(map[string]interface{}{
+		"name": name,
+		"data": msg,
+		"token": c.serverKey,
+	})
+	if err != nil {
+		newErr("write parse err:", err)
+		return
+	}
+
+	if c.compress == 1 {
+		if enc, err := goutil.Compress(json); err == nil {
+			json = enc
+		}
+	}
+
+	c.ws.Write(json)
+}
+
+// Send sends a message to the client
+//
+// This method allows sending @name listeners
+func (c *Client) sendCore(name string, msg interface{}){
+	if c.close {
 		return
 	}
 
@@ -428,4 +531,25 @@ func (c *Client) Kick(code int){
 // recommended: add .(string|[]byte|int|etc) to the end of the function to get that type output in place of interface{}
 func MsgType[T goutil.SupportedType] (msg interface{}) interface{} {
 	return goutil.ToType[T](msg)
+}
+
+func (s *Server) clientUUID() string {
+	uuid := goutil.RandBytes(s.uuidSize)
+
+	var hasID bool
+	_, hasID = s.clients.Get(string(uuid))
+
+	loops := 1000
+	for hasID && loops > 0 {
+		loops--
+		uuid = goutil.RandBytes(s.uuidSize)
+		_, hasID = s.clients.Get(string(uuid))
+	}
+
+	if hasID {
+		s.uuidSize++
+		return s.clientUUID()
+	}
+
+	return string(uuid)
 }

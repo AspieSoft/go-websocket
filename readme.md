@@ -33,14 +33,22 @@ import (
 )
 
 func main(){
+  // setup a new websocket server
   server := websocket.NewServer("https://www.example.com")
   http.Handle("/ws", server.Handler())
+
+  // optional: set a timeout for when disconnected clients can no longer reconnect with the same data
+  server := websocket.NewServer("https://www.example.com", 30 * time.Second)
 
   static := http.FileServer(http.Dir("./public/"))
   http.Handle("/", static)
 
   server.Connect(func(client *Client){
     // client connected
+
+    // a localstorage that stays with the client, even if they reconnect with a new ClientID and their data gets migrated
+    // map[string]interface{}
+    client.Store["key"] = "value"
 
     server.Broadcast("notify", "a new user connected to the server")
     server.Broadcast("user", client.ClientID)
@@ -112,10 +120,16 @@ const socket = new ServerIO(); // will default to current origin
 // or
 const socket = new ServerIO('https://www.example.com'); // optional: specify a different origin
 
-socket.connect(function(){
+socket.connect(function(initial){
   // connected to server
 
   socket.send('message', "my message to the server");
+
+  if(initial){
+    // very first time connecting to the server
+  }else{
+    // reconnecting after a previous disconnect
+  }
 });
 
 socket.on('message', function(msg){
@@ -160,8 +174,40 @@ socket.on('kicked', function(msg){
   socket.connect();
 });
 
-socket.disconnect(function(){
+socket.disconnect(function(status){
   // on disconnect
+  if(status === 1000){
+    console.log('disconnected successfully');
+  }else if(status === 1006){
+    console.warn('error: disconnected by accident, auto reconnecting...');
+  }else{
+    console.error('error:', status);
+  }
+});
+
+
+socket.on('notifications', function(){
+  console.log('my notification');
+})
+
+// stop listining to a message, and remove all client listeners of that type
+socket.off('notifications');
+
+// stop the server from sending messages, but keep the listener on the client
+socket.off('notifications', false);
+
+// request the server to send messages again
+socket.on('notifications');
+
+
+socket.error(function(type){
+  // handle errors
+  // Note: disconnection errors will Not trigger this method
+
+  if(type === 'migrate'){
+    // the client reconnected to the server, but the server failed to migrate the clients old data to the new connection
+    // client listeners should still be automatically be restored
+  }
 });
 
 ```

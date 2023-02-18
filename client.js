@@ -20,6 +20,7 @@
 
   // add script dependencies
   addScript('https://cdn.jsdelivr.net/gh/nodeca/pako@1.0.11/dist/pako.min.js');
+  addScript('https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js');
 })();
 
 class ServerIO {
@@ -39,10 +40,12 @@ class ServerIO {
     this._data = undefined;
     this.autoReconnect = true;
     this._listeners = {};
+    this._currentListeners = [];
 
     this.lastConnect = 0;
     this.lastDisconnect = 0;
     this.connected = false;
+    this._disconnectCode = undefined;
 
     const onConnect = (e) => {
       if(!e.target.url || !e.target.url.startsWith(origin)){
@@ -66,16 +69,24 @@ class ServerIO {
       }
       this.lastDisconnect = now;
 
+      this._oldData = this._data;
       this._data = undefined;
+
+      let code = e.code || this._disconnectCode || 1000;
+      if(this._disconnectCode && code === 1000){
+        code = this._disconnectCode;
+      }
+      this._disconnectCode = undefined;
+
       if(this._listeners['@disconnect']){
         for(let i = 0; i < this._listeners['@disconnect'].length; i++){
-          this._listeners['@disconnect'][i].call(this, e.code || 1000);
+          this._listeners['@disconnect'][i].call(this, code);
         }
       }
 
-      if(this.autoReconnect && [1006, 1009, 1011, 1012, 1013, 1014, 1015].includes(e.code)){
+      if(this.autoReconnect && [1006, 1009, 1011, 1012, 1013, 1014, 1015].includes(code)){
         console.log('reconnecting')
-        this.connect();
+        this.connect('@retry');
       }
     };
 
@@ -112,6 +123,7 @@ class ServerIO {
               clientID: data.clientID,
               token: data.token,
               serverKey: data.serverKey,
+              encKey: data.encKey,
               compress: compress,
             };
 
@@ -129,6 +141,38 @@ class ServerIO {
         if(data.token !== this._data.serverKey){
           return;
         }
+
+        if(data.name === '@error'){
+          if(this._listeners['@error']){
+            for(let i = 0; i < this._listeners['@error'].length; i++){
+              this._listeners['@error'][i].call(this, data.data);
+            }
+          }
+
+          if(data.data === 'migrate'){
+            for(let i = 0; i < this._currentListeners.length; i++){
+              if(!this._currentListeners[i].startsWith('@')){
+                this.on(this._currentListeners[i]);
+              }
+            }
+          }
+          return;
+        }
+
+        //todo: decrypt data.data
+        /* let enc = CryptoJS.AES.encrypt('test', 'key123').toString();
+        let bytes  = CryptoJS.AES.decrypt(enc, 'key123');
+        let originalText = bytes.toString(CryptoJS.enc.Utf8);
+        console.log(enc, originalText) */
+
+        /* let base64data = CryptoJS.enc.Base64.parse(data.data);
+        let enc = new CryptoJS.lib.WordArray.init(base64data.words.slice(4), base64data.sigBytes - 16);
+        let iv = new CryptoJS.lib.WordArray.init(base64data.words.slice(0, 4));
+        let cipher = CryptoJS.lib.CipherParams.create({ ciphertext: enc });
+
+        let resData = CryptoJS.AES.decrypt(cipher, this._data.encKey, {iv: iv, mode: CryptoJS.mode.CFB});
+        console.log(resData.toString(CryptoJS.enc.Utf8)) */
+
         if(this._listeners[data.name]){
           for(let i = 0; i < this._listeners[data.name].length; i++){
             this._listeners[data.name][i].call(this, data.data);
@@ -182,7 +226,13 @@ class ServerIO {
           await new Promise(r => setTimeout(r, 100));
         }
 
-        cb.call(this);
+        if(!this._listeners['@connect']){
+          this._listeners['@connect'] = [];
+        }
+        this._listeners['@connect'].push(cb);
+
+        // @args: 'initial connection' -> bool
+        cb.call(this, true);
         return;
       }
 
@@ -193,7 +243,7 @@ class ServerIO {
       let now = Date.now();
       if(now - this.lastConnect < 10000){
         setTimeout(() => {
-          this.connect();
+          this.connect(cb);
         }, now - this.lastConnect);
         return;
       }
@@ -211,15 +261,27 @@ class ServerIO {
         await new Promise(r => setTimeout(r, 100));
       }
 
-      const listeners = Object.keys(this._listeners);
-      for(let i = 0; i < listeners.length; i++){
+      if(cb === '@retry' && this._oldData){
         this._socketSend(JSON.stringify({
-          name: "@listener",
-          data: listeners[i],
+          name: "@connection",
+          data: 'migrate',
           token: this._data.token,
+          oldClient: this._oldData.clientID,
+          oldToken: this._oldData.token,
+          oldServerKey: this._oldData.serverKey,
+          oldEncKey: this._oldData.encKey,
         }));
+        this._oldData = undefined;
+      }
+
+      if(this._listeners['@connect']){
+        for(let i = 0; i < this._listeners['@connect'].length; i++){
+          this._listeners['@connect'][i].call(this, false);
+        }
       }
     }, 100);
+
+    return this;
   }
 
   async disconnect(cb){
@@ -229,7 +291,7 @@ class ServerIO {
         this._listeners['@disconnect'] = [];
       }
       this._listeners['@disconnect'].push(cb);
-      return;
+      return this;
     }
 
     while(!this._data){
@@ -244,6 +306,8 @@ class ServerIO {
       code += 1000;
     }
 
+    this._disconnectCode = code;
+
     // run disconnect
     this._socketSend(JSON.stringify({
       name: "@connection",
@@ -257,21 +321,30 @@ class ServerIO {
         this.socket.close(code);
       }
     }, 1000);
+
+    return this;
   }
 
   async on(name, cb){
-    if(typeof name !== 'string' || typeof name.toString() !== 'string' || typeof cb !== 'function'){
-      return;
+    if(typeof name !== 'string' || typeof name.toString() !== 'string'){
+      return this;
     }
     name = name.toString().replace(/[^\w_-]+/g, '');
     if(name === ''){
-      return;
+      return this;
     }
 
     if(!this._listeners[name]){
       this._listeners[name] = [];
     }
-    this._listeners[name].push(cb);
+
+    if(!this._currentListeners.includes(name)){
+      this._currentListeners.push(name);
+    }
+
+    if(typeof cb === 'function'){
+      this._listeners[name].push(cb);
+    }
 
     while(!this._data){
       await new Promise(r => setTimeout(r, 100));
@@ -282,15 +355,48 @@ class ServerIO {
       data: name,
       token: this._data.token,
     }));
+
+    return this;
+  }
+
+  async off(name, delCB = true){
+    if(typeof name !== 'string' || typeof name.toString() !== 'string'){
+      return this;
+    }
+    name = name.toString().replace(/[^\w_-]+/g, '');
+    if(name === ''){
+      return this;
+    }
+
+    if(this._listeners[name] && delCB){
+      delete this._listeners[name];
+    }
+
+    let ind = this._currentListeners.indexOf(name);
+    if(ind !== -1){
+      this._currentListeners.splice(ind, 1);
+    }
+
+    while(!this._data){
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    this._socketSend(JSON.stringify({
+      name: "@listener",
+      data: '!'+name,
+      token: this._data.token,
+    }));
+
+    return this;
   }
 
   async send(name, msg){
     if(typeof name !== 'string' || typeof name.toString() !== 'string' || typeof msg === 'function' /* prevent functions */){
-      return;
+      return this;
     }
     name = name.toString().replace(/[^\w_-]+/g, '');
     if(name === ''){
-      return;
+      return this;
     }
 
     while(!this._data){
@@ -313,5 +419,18 @@ class ServerIO {
     }
 
     this._socketSend(json);
+
+    return this;
+  }
+
+  async error(cb){
+    if(typeof cb === 'function'){
+      if(!this._listeners['@error']){
+        this._listeners['@error'] = [];
+      }
+      this._listeners['@error'].push(cb);
+    }
+
+    return this;
   }
 }

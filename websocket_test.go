@@ -20,15 +20,31 @@ func Test(t *testing.T){
 
 	LogErrors()
 
+	server.Connect(func(client *Client){
+		fmt.Println("connected:", client.ClientID)
+
+		client.On("message", func(msg interface{}) {
+			str := MsgType[string](msg).(string)
+			fmt.Println("client:", str)
+		})
+
+		client.Disconnect(func(code int) {
+			fmt.Println("client disconnected:", client.ClientID, "-", code)
+		})
+	})
+
 	handled := 0
 
 	server.Connect(func(client *Client){
 		fmt.Println("connected")
 		handled++
 
+		client.Store["key"] = "value"
+
 		client.On("message", func(msg interface{}) {
 			str := MsgType[string](msg).(string)
 			fmt.Println("client:", str)
+
 			handled++
 		})
 
@@ -43,6 +59,12 @@ func Test(t *testing.T){
 
 	server.On("message", func(client *Client, msg interface{}) {
 		fmt.Println("server:", msg)
+
+		fmt.Println("key:", client.Store["key"])
+		if client.Store["key"] == "value" {
+			handled++
+		}
+
 		handled++
 	})
 
@@ -60,7 +82,7 @@ func Test(t *testing.T){
 
 	time.Sleep(5 * time.Second)
 
-	if handled > 0 && handled < 5 {
+	if handled > 0 && handled < 6 {
 		t.Error("test did not finish correctly")
 	}
 
