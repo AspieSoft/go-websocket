@@ -14,6 +14,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+const goRoutineLimiter int = 10
+
 type listener struct {
 	name string
 	cbClient *func(client *Client)
@@ -168,7 +170,10 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 		if err != nil {
 			if err == io.EOF {
 				if !client.close {
+
+					limiter := make(chan int, goRoutineLimiter)
 					for _, l := range s.serverListeners {
+						limiter <- 1
 						go func(l listener){
 							if l.name == "@disconnect" {
 								cb := l.cbClientCode
@@ -177,10 +182,12 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 									(*cb)(client, 1006)
 								}
 							}
+							<-limiter
 						}(l)
 					}
 	
 					for _, l := range client.serverListeners {
+						limiter <- 1
 						go func(l listener){
 							if l.name == "@disconnect" {
 								cb := l.cbCode
@@ -189,6 +196,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 									(*cb)(1006)
 								}
 							}
+							<-limiter
 						}(l)
 					}
 				}
@@ -244,7 +252,9 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				if data == "connect" {
 					client.compress = goutil.ToNumber[uint8](json["compress"])
 
+					limiter := make(chan int, goRoutineLimiter)
 					for _, l := range s.serverListeners {
+						limiter <- 1
 						go func(l listener){
 							if l.name == "@connect" {
 								cb := l.cbClient
@@ -253,6 +263,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 									(*cb)(client)
 								}
 							}
+							<-limiter
 						}(l)
 					}
 				}else if data == "disconnect" {
@@ -261,7 +272,9 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 						code += 1000
 					}
 
+					limiter := make(chan int, goRoutineLimiter)
 					for _, l := range s.serverListeners {
+						limiter <- 1
 						go func(l listener){
 							if l.name == "@disconnect" {
 								cb := l.cbClientCode
@@ -270,10 +283,12 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 									(*cb)(client, code)
 								}
 							}
+							<-limiter
 						}(l)
 					}
 
 					for _, l := range client.serverListeners {
+						limiter <- 1
 						go func(l listener){
 							if l.name == "@disconnect" {
 								cb := l.cbCode
@@ -282,6 +297,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 									(*cb)(code)
 								}
 							}
+							<-limiter
 						}(l)
 					}
 
@@ -339,7 +355,9 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 					}
 				}()
 			}else{
+				limiter := make(chan int, goRoutineLimiter)
 				for _, l := range s.serverListeners {
+					limiter <- 1
 					go func(l listener){
 						if l.name == name {
 							cb := l.cbClientMsg
@@ -347,10 +365,12 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 								(*cb)((client), json["data"])
 							}
 						}
+						<-limiter
 					}(l)
 				}
 
 				for _, l := range client.serverListeners {
+					limiter <- 1
 					go func(l listener){
 						if l.name == name {
 							cb := l.cbMsg
@@ -358,6 +378,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 								(*cb)(json["data"])
 							}
 						}
+						<-limiter
 					}(l)
 				}
 			}
@@ -376,8 +397,13 @@ func (s *Server) Handler() websocket.Handler {
 
 // Broadcast sends a message to every client
 func (s *Server) Broadcast(name string, msg interface{}) {
+	limiter := make(chan int, goRoutineLimiter)
 	s.clients.ForEach(func(token string, client *Client) bool {
-		go client.Send(name, msg)
+		limiter <- 1
+		go func(){
+			client.Send(name, msg)
+			<-limiter
+		}()
 		return true
 	})
 }
@@ -499,8 +525,13 @@ func (s *Server) Kick(clientID string, code int){
 
 // ExitAll will force every client to disconnect from the websocket
 func (s *Server) KickAll(code int){
+	limiter := make(chan int, goRoutineLimiter)
 	s.clients.ForEach(func(token string, client *Client) bool {
-		go client.Kick(code)
+		limiter <- 1
+		go func(){
+			client.Kick(code)
+			<-limiter
+		}()
 		return true
 	})
 }

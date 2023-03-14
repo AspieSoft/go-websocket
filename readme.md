@@ -17,7 +17,7 @@ An easy way to get started with websockets in golang.
 ### JavaScript (client)
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.2.2/client.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.2.3/client.min.js" defer></script>
 ```
 
 ## Usage
