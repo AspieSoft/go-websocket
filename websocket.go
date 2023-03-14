@@ -131,8 +131,8 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	clientID := s.clientUUID()
 	token := string(goutil.RandBytes(32))
 	serverKey := string(goutil.RandBytes(32))
-	// encKey := string(goutil.RandBytes(64))
-	encKey := string(goutil.RandBytes(32))
+	encKey := string(goutil.RandBytes(64))
+	// encKey := string(goutil.RandBytes(32))
 
 	client := Client{
 		ws: ws,
