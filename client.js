@@ -20,7 +20,6 @@
 
   // add script dependencies
   addScript('https://cdn.jsdelivr.net/gh/nodeca/pako@1.0.11/dist/pako.min.js');
-  addScript('https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js');
 })();
 
 class ServerIO {
@@ -158,20 +157,6 @@ class ServerIO {
           }
           return;
         }
-
-        //todo: decrypt data.data
-        /* let enc = CryptoJS.AES.encrypt('test', 'key123').toString();
-        let bytes  = CryptoJS.AES.decrypt(enc, 'key123');
-        let originalText = bytes.toString(CryptoJS.enc.Utf8);
-        console.log(enc, originalText) */
-
-        /* let base64data = CryptoJS.enc.Base64.parse(data.data);
-        let enc = new CryptoJS.lib.WordArray.init(base64data.words.slice(4), base64data.sigBytes - 16);
-        let iv = new CryptoJS.lib.WordArray.init(base64data.words.slice(0, 4));
-        let cipher = CryptoJS.lib.CipherParams.create({ ciphertext: enc });
-
-        let resData = CryptoJS.AES.decrypt(cipher, this._data.encKey, {iv: iv, mode: CryptoJS.mode.CFB});
-        console.log(resData.toString(CryptoJS.enc.Utf8)) */
 
         if(this._listeners[data.name]){
           for(let i = 0; i < this._listeners[data.name].length; i++){

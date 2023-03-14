@@ -401,16 +401,6 @@ func (c *Client) Send(name string, msg interface{}){
 		return
 	}
 
-	//todo: encrypt stringified json msg
-	/* b, err := goutil.StringifyJSON(msg)
-	if err != nil {
-		newErr("write parse err:", err)
-		return
-	} */
-	
-	// keyHash := sha256.Sum256([]byte(c.encKey))
-	// fmt.Println(string(keyHash[:]))
-
 	json, err := goutil.StringifyJSON(map[string]interface{}{
 		"name": name,
 		"data": msg,
