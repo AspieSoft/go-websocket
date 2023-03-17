@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -9,7 +10,7 @@ import (
 	"time"
 
 	"github.com/AspieSoft/go-regex/v4"
-	"github.com/AspieSoft/goutil/v4"
+	"github.com/AspieSoft/goutil/v5"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"
 )
@@ -129,9 +130,9 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	}
 
 	clientID := s.clientUUID()
-	token := string(goutil.RandBytes(32))
-	serverKey := string(goutil.RandBytes(32))
-	encKey := string(goutil.RandBytes(64))
+	token := string(goutil.Crypt.RandBytes(32))
+	serverKey := string(goutil.Crypt.RandBytes(32))
+	encKey := string(goutil.Crypt.RandBytes(64))
 	// encKey := string(goutil.RandBytes(32))
 
 	client := Client{
@@ -146,7 +147,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 
 	s.clients.Set(clientID, &client)
 
-	json, err := goutil.StringifyJSON(map[string]interface{}{
+	json, err := goutil.JSON.Stringify(map[string]interface{}{
 		"name": "@connection",
 		"data": "connect",
 		"clientID": clientID,
@@ -218,11 +219,10 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 		msg := buf[:b]
 
 		go func(){
-			if dec, err := goutil.Decompress(goutil.CleanByte(msg)); err == nil {
-				msg = dec
-			}
+			msg = goutil.Clean.Bytes(msg)
+			gunzip(&msg)
 
-			json, err := goutil.ParseJson(goutil.CleanByte(msg))
+			json, err := goutil.JSON.Parse(goutil.Clean.Bytes(msg))
 			if err != nil {
 				newErr("read parse err:", err)
 				return
@@ -250,7 +250,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 				data := json["data"].(string)
 
 				if data == "connect" {
-					client.compress = goutil.ToNumber[uint8](json["compress"])
+					client.compress = uint8(goutil.Conv.ToUint(json["compress"]))
 
 					limiter := make(chan int, goRoutineLimiter)
 					for _, l := range s.serverListeners {
@@ -267,7 +267,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 						}(l)
 					}
 				}else if data == "disconnect" {
-					code := goutil.ToNumber[int](json["code"])
+					code := goutil.Conv.ToInt(json["code"])
 					if code < 1000 {
 						code += 1000
 					}
@@ -310,10 +310,10 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 					client.close = true
 					ws.Close()
 				}else if data == "migrate" {
-					oldClientID := goutil.ToString[string](json["oldClient"])
-					oldToken := goutil.ToString[string](json["oldToken"])
-					oldServerKey := goutil.ToString[string](json["oldServerKey"])
-					oldEncKey := goutil.ToString[string](json["oldEncKey"])
+					oldClientID := goutil.Conv.ToString(json["oldClient"])
+					oldToken := goutil.Conv.ToString(json["oldToken"])
+					oldServerKey := goutil.Conv.ToString(json["oldServerKey"])
+					oldEncKey := goutil.Conv.ToString(json["oldEncKey"])
 
 					if oldClient, ok := s.clients.Get(oldClientID); ok && oldClient.close && oldClient.token == oldToken && oldClient.serverKey == oldServerKey && oldClient.encKey == oldEncKey && oldClient.ip == client.ip {
 						// migrate old client data to new client
@@ -427,7 +427,7 @@ func (c *Client) Send(name string, msg interface{}){
 		return
 	}
 
-	json, err := goutil.StringifyJSON(map[string]interface{}{
+	json, err := goutil.JSON.Stringify(map[string]interface{}{
 		"name": name,
 		"data": msg,
 		"token": c.serverKey,
@@ -438,9 +438,7 @@ func (c *Client) Send(name string, msg interface{}){
 	}
 
 	if c.compress == 1 {
-		if enc, err := goutil.Compress(json); err == nil {
-			json = enc
-		}
+		gzip(&json)
 	}
 
 	c.ws.Write(json)
@@ -454,7 +452,7 @@ func (c *Client) sendCore(name string, msg interface{}){
 		return
 	}
 
-	json, err := goutil.StringifyJSON(map[string]interface{}{
+	json, err := goutil.JSON.Stringify(map[string]interface{}{
 		"name": name,
 		"data": msg,
 		"token": c.serverKey,
@@ -464,9 +462,7 @@ func (c *Client) sendCore(name string, msg interface{}){
 	}
 
 	if c.compress == 1 {
-		if enc, err := goutil.Compress(json); err == nil {
-			json = enc
-		}
+		gzip(&json)
 	}
 
 	c.ws.Write(json)
@@ -548,14 +544,12 @@ func (c *Client) Kick(code int){
 // MsgToType attempts to converts an msg interface from the many possible json outputs, to a specific type of your choice
 //
 // if it fails to convert, it will return a nil/zero value for the appropriate type
-//
-// recommended: add .(string|[]byte|int|etc) to the end of the function to get that type output in place of interface{}
-func MsgType[T goutil.SupportedType] (msg interface{}) interface{} {
+func MsgType[T goutil.SupportedType] (msg interface{}) T {
 	return goutil.ToType[T](msg)
 }
 
 func (s *Server) clientUUID() string {
-	uuid := goutil.RandBytes(s.uuidSize)
+	uuid := goutil.Crypt.RandBytes(s.uuidSize)
 
 	var hasID bool
 	_, hasID = s.clients.Get(string(uuid))
@@ -563,7 +557,7 @@ func (s *Server) clientUUID() string {
 	loops := 1000
 	for hasID && loops > 0 {
 		loops--
-		uuid = goutil.RandBytes(s.uuidSize)
+		uuid = goutil.Crypt.RandBytes(s.uuidSize)
 		_, hasID = s.clients.Get(string(uuid))
 	}
 
@@ -573,4 +567,18 @@ func (s *Server) clientUUID() string {
 	}
 
 	return string(uuid)
+}
+
+func gzip(b *[]byte) {
+	if comp, err := goutil.GZIP.Zip(*b); err == nil {
+		*b = []byte(base64.StdEncoding.EncodeToString(comp))
+	}
+}
+
+func gunzip(b *[]byte) {
+	if dec, err := base64.StdEncoding.DecodeString(string(*b)); err == nil {
+		if dec, err = goutil.GZIP.UnZip(dec); err == nil {
+			*b = dec
+		}
+	}
 }

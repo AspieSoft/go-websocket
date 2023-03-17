@@ -24,7 +24,7 @@ func Test(t *testing.T){
 		fmt.Println("connected:", client.ClientID)
 
 		client.On("message", func(msg interface{}) {
-			str := MsgType[string](msg).(string)
+			str := MsgType[string](msg)
 			fmt.Println("client:", str)
 		})
 
@@ -42,7 +42,7 @@ func Test(t *testing.T){
 		client.Store["key"] = "value"
 
 		client.On("message", func(msg interface{}) {
-			str := MsgType[string](msg).(string)
+			str := MsgType[string](msg)
 			fmt.Println("client:", str)
 
 			handled++
