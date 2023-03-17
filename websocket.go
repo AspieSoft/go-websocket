@@ -50,10 +50,6 @@ type Server struct {
 	uuidSize int
 }
 
-type msgType interface {
-	string | []byte | int | bool | map[string]interface{} | []interface{} | byte | int64 | int32 | float64 | float32 | [][]byte
-}
-
 // ErrLog contains a list of client errors which you can handle any way you would like
 var ErrLog []error = []error{}
 
@@ -541,10 +537,23 @@ func (c *Client) Kick(code int){
 	c.ws.WriteClose(code)
 }
 
-// MsgToType attempts to converts an msg interface from the many possible json outputs, to a specific type of your choice
+// ToType attempts to converts any interface{} from the many possible json outputs, to a specific type of your choice
 //
 // if it fails to convert, it will return a nil/zero value for the appropriate type
-func MsgType[T goutil.SupportedType] (msg interface{}) T {
+//
+// Unlike 'websocket.MsgType' This method now returns the actual type, in place of returning an interface{} with that type
+func ToType[T goutil.SupportedType] (msg interface{}) T {
+	return goutil.ToType[T](msg)
+}
+
+// MsgType attempts to converts any interface{} from the many possible json outputs, to a specific type of your choice
+//
+// if it fails to convert, it will return a nil/zero value for the appropriate type
+//
+// recommended: add .(string|[]byte|int|etc) to the end of the function to get that type output in place of interface{}
+//
+// Deprecated: Please use 'websocket.ToType' instead
+func MsgType[T goutil.SupportedType] (msg interface{}) interface{} {
 	return goutil.ToType[T](msg)
 }
 

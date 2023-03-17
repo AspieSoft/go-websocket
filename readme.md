@@ -57,12 +57,12 @@ func main(){
       // client sent a message
 
       // optional: enforce a specific message type
-      str := websocket.MsgType[string](msg).(string)
-      b := websocket.MsgType[[]byte](msg).([]byte)
-      i := websocket.MsgType[int](msg).(int)
-      bool := websocket.MsgType[bool](msg).(bool)
-      json := websocket.MsgType[map[string]interface{}](msg).(map[string]interface{})
-      array := websocket.MsgType[[]interface{}](msg).([]interface{})
+      str := websocket.ToType[string](msg)
+      b := websocket.ToType[[]byte](msg)
+      i := websocket.ToType[int](msg)
+      bool := websocket.ToType[bool](msg)
+      json := websocket.ToType[map[string]interface{}](msg)
+      array := websocket.ToType[[]interface{}](msg)
     })
 
     // send data to client
@@ -75,7 +75,7 @@ func main(){
     })
 
     client.on("send-to-friend", func(msg interface{}){
-      json := websocket.MsgType[map[string]interface{}](msg).(map[string]interface{})
+      json := websocket.ToType[map[string]interface{}](msg)
 
       // send a message to a different client
       server.send(json["friendsClientID"], json["msg"])
@@ -94,7 +94,7 @@ func main(){
   })
 
   server.On("kick", func(client *Client, msg interface{}) {
-    friendsClientID := websocket.MsgType[string](msg).(string)
+    friendsClientID := websocket.ToType[string](msg)
 
     // force a client to leave the server
     server.Kick(friendsClientID, 1000)
