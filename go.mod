@@ -6,7 +6,7 @@ require (
 	github.com/AspieSoft/go-regex/v4 v4.1.1
 	github.com/AspieSoft/goutil/v5 v5.0.1
 	github.com/alphadose/haxmap v1.2.0
-	golang.org/x/net v0.8.0
+	golang.org/x/net v0.10.0
 )
 
 require (
@@ -17,6 +17,6 @@ require (
 	github.com/cespare/go-smaz v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 )
