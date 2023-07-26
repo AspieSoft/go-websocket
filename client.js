@@ -114,7 +114,7 @@ class ServerIO {
         if(data.data === 'connect' && !this._data){
           setTimeout(() => {
             let compress = 0;
-            if(typeof window.pako !== 'undefined'){
+            if(data.canCompress && typeof window.pako !== 'undefined'){
               compress = 1;
             }
 

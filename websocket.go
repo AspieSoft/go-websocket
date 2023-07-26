@@ -52,6 +52,7 @@ type Server struct {
 
 // ErrLog contains a list of client errors which you can handle any way you would like
 var ErrLog []error = []error{}
+var GzipEnabled = true
 
 var logErr bool
 
@@ -129,7 +130,6 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	token := string(goutil.Crypt.RandBytes(32))
 	serverKey := string(goutil.Crypt.RandBytes(32))
 	encKey := string(goutil.Crypt.RandBytes(64))
-	// encKey := string(goutil.RandBytes(32))
 
 	client := Client{
 		ws: ws,
@@ -150,6 +150,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		"token": token,
 		"serverKey": serverKey,
 		"encKey": encKey,
+		"canCompress": GzipEnabled,
 	})
 	if err != nil {
 		newErr("connection parse err:", err)
@@ -579,12 +580,18 @@ func (s *Server) clientUUID() string {
 }
 
 func gzip(b *[]byte) {
+	if !GzipEnabled {
+		return
+	}
 	if comp, err := goutil.GZIP.Zip(*b); err == nil {
 		*b = []byte(base64.StdEncoding.EncodeToString(comp))
 	}
 }
 
 func gunzip(b *[]byte) {
+	if !GzipEnabled {
+		return
+	}
 	if dec, err := base64.StdEncoding.DecodeString(string(*b)); err == nil {
 		if dec, err = goutil.GZIP.UnZip(dec); err == nil {
 			*b = dec

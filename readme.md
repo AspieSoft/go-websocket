@@ -33,6 +33,10 @@ import (
 )
 
 func main(){
+  // by default, data is compressed with gzip before being send between the server and client
+  // this behavior can opptonally be disabled
+  websocket.GzipEnabled = false
+
   // setup a new websocket server
   server := websocket.NewServer("https://www.example.com")
   http.Handle("/ws", server.Handler())
