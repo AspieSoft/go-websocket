@@ -3,8 +3,8 @@ module github.com/AspieSoft/go-websocket
 go 1.19
 
 require (
-	github.com/AspieSoft/go-regex/v4 v4.2.0
-	github.com/AspieSoft/goutil/v5 v5.2.3
+	github.com/AspieSoft/go-regex/v5 v5.1.0
+	github.com/AspieSoft/goutil/v5 v5.3.0
 	github.com/alphadose/haxmap v1.2.0
 	golang.org/x/net v0.12.0
 )
