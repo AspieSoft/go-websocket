@@ -3,14 +3,13 @@ module github.com/AspieSoft/go-websocket
 go 1.19
 
 require (
-	github.com/AspieSoft/go-regex-re2 v1.0.0
-	github.com/AspieSoft/goutil/v5 v5.3.1
+	github.com/AspieSoft/go-regex/v5 v5.1.0
+	github.com/AspieSoft/goutil/v5 v5.3.2
 	github.com/alphadose/haxmap v1.3.0
 	golang.org/x/net v0.14.0
 )
 
 require (
-	github.com/AspieSoft/go-regex/v5 v5.1.0 // indirect
 	github.com/AspieSoft/go-syncterval v1.0.5 // indirect
 	github.com/AspieSoft/go-ttlcache v1.2.2 // indirect
 	github.com/GRbit/go-pcre v1.0.0 // indirect
