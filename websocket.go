@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/AspieSoft/go-regex-re2/v2"
-	"github.com/AspieSoft/goutil/v5"
+	"github.com/AspieSoft/goutil/v7"
+	"github.com/AspieSoft/goutil/crypt"
+	goutil_GZIP "github.com/AspieSoft/goutil/compress/gzip"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"
 )
@@ -127,9 +129,9 @@ func (s *Server) handleWS(ws *websocket.Conn){
 	}
 
 	clientID := s.clientUUID()
-	token := string(goutil.Crypt.RandBytes(32))
-	serverKey := string(goutil.Crypt.RandBytes(32))
-	encKey := string(goutil.Crypt.RandBytes(64))
+	token := string(crypt.RandBytes(32))
+	serverKey := string(crypt.RandBytes(32))
+	encKey := string(crypt.RandBytes(64))
 
 	client := Client{
 		ws: ws,
@@ -559,7 +561,7 @@ func MsgType[T goutil.SupportedType] (msg interface{}) interface{} {
 }
 
 func (s *Server) clientUUID() string {
-	uuid := goutil.Crypt.RandBytes(s.uuidSize)
+	uuid := crypt.RandBytes(s.uuidSize)
 
 	var hasID bool
 	_, hasID = s.clients.Get(string(uuid))
@@ -567,7 +569,7 @@ func (s *Server) clientUUID() string {
 	loops := 1000
 	for hasID && loops > 0 {
 		loops--
-		uuid = goutil.Crypt.RandBytes(s.uuidSize)
+		uuid = crypt.RandBytes(s.uuidSize)
 		_, hasID = s.clients.Get(string(uuid))
 	}
 
@@ -583,7 +585,7 @@ func gzip(b *[]byte) {
 	if !GzipEnabled {
 		return
 	}
-	if comp, err := goutil.GZIP.Zip(*b); err == nil {
+	if comp, err := goutil_GZIP.Zip(*b); err == nil {
 		*b = []byte(base64.StdEncoding.EncodeToString(comp))
 	}
 }
@@ -593,7 +595,7 @@ func gunzip(b *[]byte) {
 		return
 	}
 	if dec, err := base64.StdEncoding.DecodeString(string(*b)); err == nil {
-		if dec, err = goutil.GZIP.UnZip(dec); err == nil {
+		if dec, err = goutil_GZIP.UnZip(dec); err == nil {
 			*b = dec
 		}
 	}
