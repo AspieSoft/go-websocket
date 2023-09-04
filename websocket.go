@@ -418,7 +418,7 @@ func (c *Client) Send(name string, msg interface{}){
 		return
 	}
 
-	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+	name = string(regex.Comp(`[^\w_-]+`).RepStrLit([]byte(name), []byte{}))
 
 	if !goutil.Contains(c.listeners, name) {
 		return
@@ -475,7 +475,7 @@ func (s *Server) Connect(cb func(client *Client)){
 
 // On runs your callback when any client a message of the same name
 func (s *Server) On(name string, cb func(client *Client, msg interface{})){
-	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+	name = string(regex.Comp(`[^\w_-]+`).RepStrLit([]byte(name), []byte{}))
 
 	s.serverListeners = append(s.serverListeners, listener{
 		name: name,
@@ -485,7 +485,7 @@ func (s *Server) On(name string, cb func(client *Client, msg interface{})){
 
 // On runs your callback when the client sends a message of the same name
 func (c *Client) On(name string, cb func(msg interface{})){
-	name = string(regex.Comp(`[^\w_-]+`).RepStr([]byte(name), []byte{}))
+	name = string(regex.Comp(`[^\w_-]+`).RepStrLit([]byte(name), []byte{}))
 
 	c.serverListeners = append(c.serverListeners, listener{
 		name: name,
