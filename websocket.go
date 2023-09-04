@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AspieSoft/go-regex-re2"
+	"github.com/AspieSoft/go-regex-re2/v2"
 	"github.com/AspieSoft/goutil/v5"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"

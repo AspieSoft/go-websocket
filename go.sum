@@ -1,11 +1,11 @@
-github.com/AspieSoft/go-regex-re2 v1.0.0 h1:72fAqyXT2qobJAq04DJfantgiQ7AtSITqA8TcjUboO0=
-github.com/AspieSoft/go-regex-re2 v1.0.0/go.mod h1:tb0+vsFFI6wUXJxqg10wy+eWni9x6LWNGyJEwt8HcE0=
+github.com/AspieSoft/go-regex-re2/v2 v2.0.8 h1:IuolgUdHVkRJa2VJc3e/WaSda5FCLPExhawCoVliWxk=
+github.com/AspieSoft/go-regex-re2/v2 v2.0.8/go.mod h1:FNK4e+eeVgwg0jPjzkkUpBZOunmKvDfD9cMdF0TXzFs=
 github.com/AspieSoft/go-syncterval v1.0.5 h1:fzSNZofSX/7iBkLrWizMzGLGcBl3d+76cHyr8M9tjGg=
 github.com/AspieSoft/go-syncterval v1.0.5/go.mod h1:r+mTZPOWvfS0Y5YAxKINGNt8eX76i2Lib0VeqAw3SW4=
 github.com/AspieSoft/go-ttlcache v1.2.2 h1:U6MMYY5PKANsB4/vhTiQsQ2U/y1P1yqMCxLw+qFNmCo=
 github.com/AspieSoft/go-ttlcache v1.2.2/go.mod h1:czwXaDat1SKWGJDXkoMZWZFip97MXxuU0KzqJ9zVLDo=
-github.com/AspieSoft/goutil/v5 v5.3.3 h1:F3gy4oS0MEfqVVb+pSrDhp3YeILkS35FKdUT+kxFtd4=
-github.com/AspieSoft/goutil/v5 v5.3.3/go.mod h1:vQVVCsJtohmR1nqNBKysF+b/bVE6eFI6TskMFSChRn8=
+github.com/AspieSoft/goutil/v5 v5.3.4 h1:0/efMuTystIPDXfi6GGOKGbgd3Pl1lYjQj2pLPl4s1c=
+github.com/AspieSoft/goutil/v5 v5.3.4/go.mod h1:iPHq44uDE4RfhgPPo+O8ieNOiylLQ0h/fVpFTw/EigY=
 github.com/alphadose/haxmap v1.3.0 h1:C/2LboOnPCZP27GmmSXOcwx360st0P8N0fTJ3voefKc=
 github.com/alphadose/haxmap v1.3.0/go.mod h1:rjHw1IAqbxm0S3U5tD16GoKsiAd8FWx5BJ2IYqXwgmM=
 github.com/andybalholm/brotli v1.0.5 h1:8uQZIdzKmjc/iuPu7O2ioW48L81FgatrcpfFmiq/cCs=
@@ -21,5 +21,5 @@ golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63/go.mod h1:0v4NqG35kSWCMzLaMe
 golang.org/x/net v0.14.0 h1:BONx9s002vGdD9umnlX1Po8vOZmrgH34qlHcD1MfK14=
 golang.org/x/net v0.14.0/go.mod h1:PpSgVXXLK0OxS0F31C1/tv6XNguvCrnXIDrFMspZIUI=
 golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.11.0 h1:eG7RXZHdqOJ1i+0lgLgCpSXAp6M3LYlAo6osgSi0xOM=
-golang.org/x/sys v0.11.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.12.0 h1:CM0HF96J0hcLAwsHPJZjfdNzs0gftsLfgKt57wWHJ0o=
+golang.org/x/sys v0.12.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
