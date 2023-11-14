@@ -209,7 +209,7 @@ socket.error(function(type){
   // Note: disconnection errors will Not trigger this method
 
   if(type === 'migrate'){
-    // client reconnected to the server, but the server failed to migrate the clients old data to the new connection
+    // the client reconnected to the server, but the server failed to migrate the clients old data to the new connection
     // client listeners should still automatically be restored
   }
 });
