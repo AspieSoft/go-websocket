@@ -50,7 +50,7 @@ func main(){
   server.Connect(func(client *websocket.Client){
     // client connected
 
-    // a localstorage that stays with the client, even if they reconnect with a new ClientID and their data gets migrated
+    // localstorage that stays with the client, and verifies their session
     // map[string]interface{}
     client.Store["key"] = "value"
 
