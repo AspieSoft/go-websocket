@@ -4,20 +4,20 @@
 
 An easy way to get started with websockets in golang.
 
+This module tracks user sessions, can recover temporarly lost connections, and compresses data through gzip if supported by the client.
+
 ## Installation
 
 ### Go (server)
 
 ```shell script
-
-  go get github.com/AspieSoft/go-websocket
-
+go get github.com/AspieSoft/go-websocket
 ```
 
 ### JavaScript (client)
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.3.1/client.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.4.7/client.min.js" defer></script>
 ```
 
 ## Usage
