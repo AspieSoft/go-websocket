@@ -47,7 +47,7 @@ func main(){
   static := http.FileServer(http.Dir("./public/"))
   http.Handle("/", static)
 
-  server.Connect(func(client *Client){
+  server.Connect(func(client *websocket.Client){
     // client connected
 
     // a localstorage that stays with the client, even if they reconnect with a new ClientID and their data gets migrated
@@ -97,7 +97,7 @@ func main(){
     })
   })
 
-  server.On("kick", func(client *Client, msg interface{}) {
+  server.On("kick", func(client *websocket.Client, msg interface{}) {
     friendsClientID := websocket.ToType[string](msg)
 
     // force a client to leave the server
