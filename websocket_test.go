@@ -80,7 +80,7 @@ func Test(t *testing.T){
 		}
 	}()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	if handled > 0 && handled < 6 {
 		t.Error("test did not finish correctly")

@@ -4,7 +4,7 @@
 
 An easy way to get started with websockets in golang.
 
-This module tracks user sessions, can recover temporarly lost connections, and compresses data through gzip if supported by the client.
+This module tracks user sessions, can recover temporarily lost connections, and compresses data through gzip if supported by the client.
 
 ## Installation
 
@@ -17,7 +17,7 @@ go get github.com/AspieSoft/go-websocket
 ### JavaScript (client)
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.4.7/client.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/AspieSoft/go-websocket@1.4.8/client.min.js" defer></script>
 ```
 
 ## Usage
@@ -33,16 +33,21 @@ import (
 )
 
 func main(){
-  // by default, data is compressed with gzip before being send between the server and client
-  // this behavior can opptonally be disabled
-  websocket.GzipEnabled = false
-
   // setup a new websocket server
   server := websocket.NewServer("https://www.example.com")
   http.Handle("/ws", server.Handler())
 
   // optional: set a timeout for when disconnected clients can no longer reconnect with the same data
   server := websocket.NewServer("https://www.example.com", 30 * time.Second)
+
+  // by default, data is compressed with gzip before being send between the server and client
+  // this behavior can opptonally be disabled
+  server.Gzip = false
+
+  // by default, the server only reads requests up to 1 megabyte
+  // this value can opptionally be changed
+  server.ReqSize = 1024 // KB
+
 
   static := http.FileServer(http.Dir("./public/"))
   http.Handle("/", static)

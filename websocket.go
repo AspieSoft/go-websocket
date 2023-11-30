@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/AspieSoft/go-regex-re2/v2"
-	"github.com/AspieSoft/goutil/v7"
-	"github.com/AspieSoft/goutil/crypt"
 	goutil_GZIP "github.com/AspieSoft/goutil/compress/gzip"
+	"github.com/AspieSoft/goutil/crypt"
+	"github.com/AspieSoft/goutil/v7"
 	"github.com/alphadose/haxmap"
 	"golang.org/x/net/websocket"
 )
@@ -42,6 +42,8 @@ type Client struct {
 	compress uint8
 	connLost int64
 	Store map[string]interface{}
+
+	gzip *bool
 }
 
 // Server for a websocket
@@ -50,10 +52,22 @@ type Server struct {
 	clients *haxmap.Map[string, *Client]
 	serverListeners []listener
 	uuidSize int
+
+	// ReqSize defines number of kilobytes (KB) that can be sent by a client at a time
+	//
+	// default: 1024 (1MB)
+	ReqSize uint32
+
+	// Gzip defines whether or not gzip compression is enabled for the websocket server
+	Gzip bool
 }
 
 // ErrLog contains a list of client errors which you can handle any way you would like
 var ErrLog []error = []error{}
+
+// GzipEnabled defines whether or not gzip compression is enabled be default for new websocket servers
+//
+// Deprecated: please use `Server.Gzip` instead
 var GzipEnabled = true
 
 var logErr bool
@@ -100,6 +114,9 @@ func NewServer(origin string, reconnectTimeout ...time.Duration) *Server {
 		origin: origin,
 		clients: haxmap.New[string, *Client](),
 		uuidSize: 16,
+
+		ReqSize: 1024,
+		Gzip: GzipEnabled,
 	}
 
 	timeout := int64(30 * time.Second)
@@ -141,6 +158,8 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		serverKey: serverKey,
 		encKey: encKey,
 		Store: map[string]interface{}{},
+
+		gzip: &s.Gzip,
 	}
 
 	s.clients.Set(clientID, &client)
@@ -152,7 +171,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 		"token": token,
 		"serverKey": serverKey,
 		"encKey": encKey,
-		"canCompress": GzipEnabled,
+		"canCompress": s.Gzip,
 	})
 	if err != nil {
 		newErr("connection parse err:", err)
@@ -164,7 +183,7 @@ func (s *Server) handleWS(ws *websocket.Conn){
 }
 
 func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
-	buf := make([]byte, 102400)
+	buf := make([]byte, (int64(s.ReqSize) * 1024) + 1024)
 	for !client.close {
 		b, err := ws.Read(buf)
 		if err != nil {
@@ -219,7 +238,9 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 
 		go func(){
 			msg = goutil.Clean.Bytes(msg)
-			gunzip(&msg)
+			if s.Gzip {
+				gunzip(&msg)
+			}
 
 			json, err := goutil.JSON.Parse(goutil.Clean.Bytes(msg))
 			if err != nil {
@@ -436,7 +457,7 @@ func (c *Client) Send(name string, msg interface{}){
 		return
 	}
 
-	if c.compress == 1 {
+	if *c.gzip && c.compress == 1 {
 		gzip(&json)
 	}
 
@@ -460,7 +481,7 @@ func (c *Client) sendCore(name string, msg interface{}){
 		newErr("write parse err:", err)
 	}
 
-	if c.compress == 1 {
+	if *c.gzip && c.compress == 1 {
 		gzip(&json)
 	}
 
@@ -582,18 +603,12 @@ func (s *Server) clientUUID() string {
 }
 
 func gzip(b *[]byte) {
-	if !GzipEnabled {
-		return
-	}
 	if comp, err := goutil_GZIP.Zip(*b); err == nil {
 		*b = []byte(base64.StdEncoding.EncodeToString(comp))
 	}
 }
 
 func gunzip(b *[]byte) {
-	if !GzipEnabled {
-		return
-	}
 	if dec, err := base64.StdEncoding.DecodeString(string(*b)); err == nil {
 		if dec, err = goutil_GZIP.UnZip(dec); err == nil {
 			*b = dec

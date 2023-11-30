@@ -1,0 +1,6 @@
+node_modules
+.history
+.vscode
+.idea
+.git
+.svn
