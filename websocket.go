@@ -125,15 +125,17 @@ func NewServer(origin string, reconnectTimeout ...time.Duration) *Server {
 	}
 
 	go func(){
-		time.Sleep(1 * time.Second)
-
-		now := time.Now().UnixNano()
-		server.clients.ForEach(func(clientID string, client *Client) bool {
-			if client.close && now - client.connLost > timeout {
-				server.clients.Del(clientID)
-			}
-			return true
-		})
+		for {
+			time.Sleep(1 * time.Second)
+	
+			now := time.Now().UnixNano()
+			server.clients.ForEach(func(clientID string, client *Client) bool {
+				if client.close && now - client.connLost > timeout {
+					server.clients.Del(clientID)
+				}
+				return true
+			})
+		}
 	}()
 
 	return &server
@@ -222,7 +224,7 @@ func (s *Server) readLoop(ws *websocket.Conn, client *Client) {
 
 				client.connLost = time.Now().UnixNano()
 				client.close = true
-				// s.clients.Del(client.ClientID)
+				s.clients.Del(client.ClientID)
 				break
 			}
 
